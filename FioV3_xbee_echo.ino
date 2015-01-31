@@ -3,8 +3,10 @@
 
 XBee xbee = XBee();
 
-uint16_t myaddress = 1616; 
-uint16_t mypan = 0x1001;
+#define htons(A) ((((uint16_t)(A) & 0xff00) >> 8) | (((uint16_t)(A) & 0x00ff) << 8))
+
+uint16_t myaddress = htons(1616); 
+uint16_t mypan = htons(0x1001);
 uint8_t mych = 11;
 AtCommandRequest at_my = AtCommandRequest( (uint8_t*)"MY", (uint8_t*)&myaddress, 2);
 AtCommandRequest at_ch = AtCommandRequest( (uint8_t*)"CH", (uint8_t*)&mych, 1);
@@ -19,7 +21,7 @@ uint8_t do_init = 1;
 //char payload[] = "hello world\n";
 //Tx16Request tx = Tx16Request(0x1874, (uint8_t *)&payload[0], sizeof(payload));
 TxStatusResponse txStatus = TxStatusResponse();
-
+Tx16Request tx = Tx16Request();
 int RXLED = 17;  // The RX LED has a defined Arduino pin
 // The TX LED was not so lucky, we'll need to use pre-defined
 // macros (TXLED1, TXLED0) to control that.
@@ -44,21 +46,29 @@ void readPacket()
       else {
         // the remote XBee did not receive our packet. is it powered on?
         Serial.println("tx: no ack\n");
-      } 
-    } 
-    else if (xbee.getResponse().getApiId() == RX_16_RESPONSE){
+      }         
+    } else if (xbee.getResponse().getApiId() == RX_16_RESPONSE){
       Rx16Response rx16;
-      
-//      RXLED1;
+     
       xbee.getResponse().getRx16Response(rx16);
       
       Serial.print("RX: Src:");
       Serial.print(rx16.getRemoteAddress16());
       Serial.print("rssi: ");
       Serial.print(rx16.getRssi());
-      Serial.print("data: ");
-      Serial.println((char*)rx16.getData());
-//      RXLED0;
+      Serial.println();
+      
+        {
+          tx.setAddress16(rx16.getRemoteAddress16());
+          tx.setPayload(rx16.getData());
+          tx.setPayloadLength(rx16.getDataLength());
+          xbee.send(tx); // echo the packet back    
+        } 
+
+//      print the data if you know it is ascii printable      
+//      Serial.print("data: ");
+//      Serial.println((char*)rx16.getData());
+
     } else if (xbee.getResponse().getApiId() == AT_COMMAND_RESPONSE){
       AtCommandResponse atResponse = AtCommandResponse();
       xbee.getResponse().getAtCommandResponse(atResponse);
@@ -122,6 +132,7 @@ void loop()
 {
   uint8_t i;
   if (do_init > 0){
+    // this delay is so you can connect the terminal and see the result
     for ( i=0; i < 20; i ++){
       Serial.print("Delay ");
       Serial.print(i);
